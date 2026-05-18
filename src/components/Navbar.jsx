@@ -17,7 +17,7 @@ export default function Navbar({ darkMode, setDarkMode }) {
     <nav>
       <div className="nav-container">
         <a href="#" className="logo" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-          Sooraj
+          𝐒𝐔𝐑𝐀𝐉 𝐒𝐀𝐋𝐈𝐇𝐔
         </a>
 
         {/* Desktop Links */}

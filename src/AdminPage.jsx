@@ -905,6 +905,7 @@ function SitePanel({ flash }) {
       let coverImageUrl = settings.coverImageUrl;
       const prevProfilePublicId = settings.profilePublicId || null;
       const prevCoverPublicId = settings.coverPublicId || null;
+      const prevCvPublicId = settings.cvPublicId || null;
       let newProfilePublicId = null;
       let newCoverPublicId = null;
       let newCvPublicId = null;
@@ -969,6 +970,24 @@ function SitePanel({ flash }) {
           });
         } catch (err) {
           console.warn('Failed to delete previous cover asset:', err.message || err);
+        }
+      }
+
+      if (prevCvPublicId && newCvPublicId && import.meta.env.VITE_DELETE_API_URL && import.meta.env.VITE_ADMIN_DELETE_TOKEN) {
+        try {
+          const cvResourceType = settings.cvDownloadUrl
+            ? settings.cvDownloadUrl.split("?")[0].toLowerCase().endsWith('.pdf')
+              ? 'raw'
+              : 'image'
+            : 'image';
+
+          await fetch(`${import.meta.env.VITE_DELETE_API_URL}/delete-asset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-token': import.meta.env.VITE_ADMIN_DELETE_TOKEN },
+            body: JSON.stringify({ public_id: prevCvPublicId, resource_type: cvResourceType }),
+          });
+        } catch (err) {
+          console.warn('Failed to delete previous CV asset:', err.message || err);
         }
       }
     } catch (err) {

@@ -24,11 +24,15 @@ app.post('/delete-asset', async (req, res) => {
   try {
     const token = req.headers['x-admin-token'];
     if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
-    const { public_id } = req.body;
+    const { public_id, resource_type } = req.body;
     if (!public_id) return res.status(400).json({ error: 'public_id required' });
 
-    // Destroy the asset (image resource)
-    const result = await cloudinary.uploader.destroy(public_id, { resource_type: 'image', invalidate: true });
+    const requestedResourceType = resource_type || 'image';
+    let result = await cloudinary.uploader.destroy(public_id, { resource_type: requestedResourceType, invalidate: true });
+
+    if (!resource_type && result.result === 'not found') {
+      result = await cloudinary.uploader.destroy(public_id, { resource_type: 'raw', invalidate: true });
+    }
 
     return res.json({ ok: true, result });
   } catch (err) {

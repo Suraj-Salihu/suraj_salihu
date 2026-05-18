@@ -193,7 +193,7 @@ body.dark .mobile-menu-links .nav-link {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  color: white;
+  color: var(--primary-light);
 }
 
 .hero-content {
