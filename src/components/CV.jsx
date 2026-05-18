@@ -132,17 +132,37 @@ export default function CV() {
 
           {/* Download */}
           <div className="cv-download">
-            {settings.cvDownloadUrl ? (
+            {settings.cvDownloadUrl?.trim() ? (
               <a
                 href={settings.cvDownloadUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noreferrer noopener"
                 className="btn btn-primary"
+                onClick={(e) => {
+                  if (!settings.cvDownloadUrl?.trim()) {
+                    e.preventDefault();
+                  }
+                }}
               >
-                {settings.cvDownloadLabel}
+                {settings.cvDownloadLabel || "Download CV"}
               </a>
             ) : (
-              <div style={{ color: "rgba(255,255,255,.5)", fontSize: "0.9rem", fontStyle: "italic" }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  maxWidth: 260,
+                  padding: ".75rem 1.5rem",
+                  borderRadius: ".5rem",
+                  border: "2px solid rgba(255,255,255,.2)",
+                  color: "rgba(255,255,255,.65)",
+                  background: "rgba(255,255,255,.04)",
+                  fontSize: "0.9rem",
+                  fontStyle: "italic",
+                }}
+              >
                 No CV added yet.
               </div>
             )}
