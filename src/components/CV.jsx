@@ -132,14 +132,20 @@ export default function CV() {
 
           {/* Download */}
           <div className="cv-download">
-            <a
-              href={settings.cvDownloadUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary"
-            >
-              {settings.cvDownloadLabel}
-            </a>
+            {settings.cvDownloadUrl ? (
+              <a
+                href={settings.cvDownloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-primary"
+              >
+                {settings.cvDownloadLabel}
+              </a>
+            ) : (
+              <div style={{ color: "rgba(255,255,255,.5)", fontSize: "0.9rem", fontStyle: "italic" }}>
+                No CV added yet.
+              </div>
+            )}
           </div>
         </div>
       </div>
