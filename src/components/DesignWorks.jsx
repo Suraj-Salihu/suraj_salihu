@@ -56,7 +56,7 @@ export default function DesignWorks() {
                 return { src: data.imageUrl, caption: data.caption || `${CATEGORY_LABELS[cat]} ${i + 1}` };
               }
               return null;
-            });
+            }).filter((s) => s !== null);
             return [cat, slides];
           })
         );

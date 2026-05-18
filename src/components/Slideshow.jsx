@@ -1,6 +1,17 @@
 import { useState, useRef } from "react";
 
-export default function Slideshow({ slides }) {
+export default function Slideshow({ slides = [] }) {
+  // Filter out any null/undefined slides
+  const validSlides = slides.filter((s) => s && s.src);
+  
+  if (validSlides.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "2rem", color: "rgba(255,255,255,.5)" }}>
+        No designs added yet.
+      </div>
+    );
+  }
+
   const [current, setCurrent] = useState(0);
   const slideshowRef = useRef(null);
 
@@ -17,8 +28,8 @@ export default function Slideshow({ slides }) {
 
   const move = (dir) => {
     let next = current + dir;
-    if (next >= slides.length) next = 0;
-    if (next < 0) next = slides.length - 1;
+    if (next >= validSlides.length) next = 0;
+    if (next < 0) next = validSlides.length - 1;
     goTo(next);
   };
 
@@ -26,8 +37,8 @@ export default function Slideshow({ slides }) {
     <div>
       <div className="slideshow-container">
         <div className="slideshow" ref={slideshowRef}>
-          {slides.map((slide, i) => (
-            <div className="slide" key={i}>
+          {validSlides.map((slide, i) => (
+            <div className="slide" key={`slide-${slide.src}-${i}`}>
               <img src={slide.src} alt={slide.caption} />
               <div className="slide-caption">{slide.caption}</div>
             </div>
@@ -37,9 +48,9 @@ export default function Slideshow({ slides }) {
         <button className="slideshow-arrow next" onClick={() => move(1)}>❯</button>
       </div>
       <div className="slideshow-nav">
-        {slides.map((_, i) => (
+        {validSlides.map((_, i) => (
           <button
-            key={i}
+            key={`nav-${i}`}
             className={i === current ? "active" : ""}
             onClick={() => goTo(i)}
           />
