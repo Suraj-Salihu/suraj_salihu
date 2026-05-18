@@ -5,7 +5,9 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * IMAGES  → Cloudinary at a FIXED PATH per slot (unsigned uploads).
  *           Uploading a new image performs an unsigned Cloudinary upload to the same public_id,
- *           which OVERWRITES the old file. No accumulation, no old copies.
+ *           which overwrites the previous file at that path (Cloudinary keeps a single visible
+ *           asset per public_id). The admin UI appends a cache-busting query string so the
+ *           browser fetches the latest file immediately after an overwrite.
  *
  *           Project image paths:  portfolio/projects/slot-1.jpg  … slot-6.jpg
  *           Design image paths:   portfolio/designs/birthday/slot-1.jpg … etc.
@@ -19,8 +21,9 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { db } from "./firebase";
+import { defaultSiteSettings } from "./data";
 import {
   doc, getDoc, setDoc, collection, getDocs,
 } from "firebase/firestore";
@@ -28,9 +31,12 @@ import {
 /* ════════════════════════════════════════════════════════════════════════════
    CONSTANTS
 ════════════════════════════════════════════════════════════════════════════ */
-const ADMIN_PASSWORD    = "sooraj2025"; // ← change to your own password
-const DESIGN_CATEGORIES = ["birthday", "advert", "song", "invitation", "logo", "other"];
-const CATEGORY_LABELS   = {
+const ADMIN_PASSWORD_HASH = "87a8a4a26d5bfaa9739c5b83014987a3457aab58ab70132440a41378b0049b00"; // SHA-256 of your chosen password
+const AUTH_TOKEN          = "admin_auth";
+const AUTH_TOKEN_EXPIRY   = "admin_auth_expiry";
+const AUTH_EXPIRY_MS      = 30 * 60 * 1000; // 30 minutes
+const DESIGN_CATEGORIES   = ["birthday", "advert", "song", "invitation", "logo", "other"];
+const CATEGORY_LABELS     = {
   birthday:   "Birthday Designs",
   advert:     "Advert Designs",
   song:       "Song Covers",
@@ -49,6 +55,7 @@ const designStoragePath = (category, slotNum) =>
 // Fixed Firestore doc IDs
 const projectDocId = (slotNum)           => `project-${slotNum}`;
 const designDocId  = (category, slotNum) => `design-${category}-${slotNum}`;
+const siteDocId    = "site-settings";
 
 /* ════════════════════════════════════════════════════════════════════════════
    FIREBASE HELPERS
@@ -64,18 +71,21 @@ async function uploadToFixed(storagePath, file) {
     throw new Error("Missing Cloudinary configuration in .env");
   }
 
-  const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+  const isRaw = !file.type.startsWith("image/");
+  const url = `https://api.cloudinary.com/v1_1/${cloudName}/${isRaw ? "auto" : "image"}/upload`;
 
-  // remove extension for overwrite path
-  const publicId = storagePath.replace(/\.[^/.]+$/, "");
+  // We upload using a unique public_id so we can delete the previous asset server-side.
+  const storagePathBase = storagePath.replace(/\.[^/.]+$/, "");
+  const publicId = `${storagePathBase}-${Date.now()}`;
 
   const form = new FormData();
 
   form.append("file", file);
   form.append("upload_preset", preset);
   form.append("public_id", publicId);
-  // `invalidate` is not allowed for unsigned uploads; Cloudinary rejects it.
-  // Leave it out for unsigned presets.
+  if (isRaw) {
+    form.append("resource_type", "raw");
+  }
 
   const res = await fetch(url, {
     method: "POST",
@@ -88,12 +98,36 @@ async function uploadToFixed(storagePath, file) {
     throw new Error(data.error?.message || "Cloudinary upload failed");
   }
 
-  return data.secure_url;
+  const secureUrl = data.secure_url;
+  const cacheBusted = secureUrl.includes("?")
+    ? `${secureUrl}&t=${Date.now()}`
+    : `${secureUrl}?t=${Date.now()}`;
+  return { secure_url: cacheBusted, public_id: publicId };
 }
 
 /** Save metadata to Firestore (merge keeps existing fields if partial update) */
-async function saveMeta(docId, data) {
-  await setDoc(doc(db, "portfolio", docId), data, { merge: true });
+async function hashString(value) {
+  const buffer = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function authIsValid() {
+  const token = sessionStorage.getItem(AUTH_TOKEN);
+  const expiry = Number(sessionStorage.getItem(AUTH_TOKEN_EXPIRY));
+  return token === "yes" && expiry > Date.now();
+}
+
+async function saveMeta(docId, data, retries = 2) {
+  try {
+    await setDoc(doc(db, "portfolio", docId), data, { merge: true });
+  } catch (err) {
+    if (retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return saveMeta(docId, data, retries - 1);
+    }
+    throw err;
+  }
 }
 
 /** Load one Firestore doc → returns data or null */
@@ -114,17 +148,26 @@ async function loadAllMeta() {
    ROOT
 ════════════════════════════════════════════════════════════════════════════ */
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(
-    () => sessionStorage.getItem("admin_auth") === "yes"
-  );
-  const [pw, setPw]     = useState("");
+  const [authed, setAuthed] = useState(authIsValid);
+  const [pw, setPw] = useState("");
   const [pwErr, setPwErr] = useState(false);
   const [shake, setShake] = useState(false);
 
-  const login = (e) => {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!authIsValid()) {
+        setAuthed(false);
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const login = async (e) => {
     e.preventDefault();
-    if (pw === ADMIN_PASSWORD) {
-      sessionStorage.setItem("admin_auth", "yes");
+    const hash = await hashString(pw);
+    if (hash === ADMIN_PASSWORD_HASH) {
+      sessionStorage.setItem(AUTH_TOKEN, "yes");
+      sessionStorage.setItem(AUTH_TOKEN_EXPIRY, String(Date.now() + AUTH_EXPIRY_MS));
       setAuthed(true);
     } else {
       setPwErr(true);
@@ -145,7 +188,8 @@ export default function AdminPage() {
   return (
     <Dashboard
       onLogout={() => {
-        sessionStorage.removeItem("admin_auth");
+        sessionStorage.removeItem(AUTH_TOKEN);
+        sessionStorage.removeItem(AUTH_TOKEN_EXPIRY);
         setAuthed(false);
       }}
     />
@@ -204,6 +248,7 @@ function Dashboard({ onLogout }) {
   const NAV = [
     { key: "projects", icon: "🗂️", label: "Projects" },
     { key: "designs",  icon: "🎨", label: "Design Works" },
+    { key: "site",     icon: "⚙️", label: "Site Content" },
   ];
 
   return (
@@ -245,12 +290,18 @@ function Dashboard({ onLogout }) {
           <div>
             <h2 style={{ color: "#fff", margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
               {NAV.find((n) => n.key === tab)?.icon}{" "}
-              {tab === "projects" ? "Manage Projects" : "Manage Design Works"}
+              {tab === "projects"
+                ? "Manage Projects"
+                : tab === "designs"
+                ? "Manage Design Works"
+                : "Edit Site Content"}
             </h2>
             <p style={{ color: "rgba(255,255,255,.35)", margin: "3px 0 0", fontSize: ".8rem" }}>
               {tab === "projects"
                 ? "6 fixed slots · uploading a new image overwrites the old one permanently"
-                : "6 slots per category · overwrite anytime, old file is deleted automatically"}
+                : tab === "designs"
+                ? "6 slots per category · overwrite anytime, old file is deleted automatically"
+                : "Edit hero, about, skills & tools, CV download, and footer social links."}
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -262,6 +313,7 @@ function Dashboard({ onLogout }) {
         <div style={s.content}>
           {tab === "projects" && <ProjectsPanel flash={flash} />}
           {tab === "designs"  && <DesignsPanel  flash={flash} />}
+          {tab === "site"     && <SitePanel    flash={flash} />}
         </div>
       </div>
 
@@ -367,10 +419,14 @@ function ProjectEditor({ slot, onSaved, onCancel, flash }) {
     setSaving(true);
     try {
       let imageUrl = slot?.imageUrl || "";
+      const prevPublicId = slot?.publicId || null;
+      let newPublicId = null;
 
-      // If a new file was chosen → overwrite the fixed Cloudinary public_id path
+      // If a new file was chosen → upload with a unique public_id, save it, and later delete the previous asset server-side
       if (file) {
-        imageUrl = await uploadToFixed(projectStoragePath(slot.slotNum), file);
+        const res = await uploadToFixed(projectStoragePath(slot.slotNum), file);
+        imageUrl = res.secure_url;
+        newPublicId = res.public_id;
       }
 
       const data = {
@@ -384,11 +440,25 @@ function ProjectEditor({ slot, onSaved, onCancel, flash }) {
         codeLink:    form.codeLink.trim(),
         status:      form.status,
         imageUrl,
+        publicId: newPublicId || prevPublicId || null,
         updatedAt:   new Date().toISOString(),
       };
 
       await saveMeta(projectDocId(slot.slotNum), data);
       onSaved(slot.slotNum, data);
+
+      // Attempt to delete the previous Cloudinary asset via backend helper
+      if (prevPublicId && newPublicId && import.meta.env.VITE_DELETE_API_URL && import.meta.env.VITE_ADMIN_DELETE_TOKEN) {
+        try {
+          await fetch(`${import.meta.env.VITE_DELETE_API_URL}/delete-asset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-token': import.meta.env.VITE_ADMIN_DELETE_TOKEN },
+            body: JSON.stringify({ public_id: prevPublicId }),
+          });
+        } catch (err) {
+          console.warn('Failed to delete previous Cloudinary asset:', err.message || err);
+        }
+      }
     } catch (err) {
       console.error(err);
       flash("❌ Save failed: " + err.message, "err");
@@ -595,12 +665,16 @@ function DesignEditor({ slot, category, onSaved, onCancel, flash }) {
     setSaving(true);
     try {
       let imageUrl = slot?.imageUrl || "";
+      const prevPublicId = slot?.publicId || null;
+      let newPublicId = null;
 
       if (file) {
-        imageUrl = await uploadToFixed(
+        const res = await uploadToFixed(
           designStoragePath(category, slot.slotNum),
           file
         );
+        imageUrl = res.secure_url;
+        newPublicId = res.public_id;
       }
 
       const data = {
@@ -608,11 +682,25 @@ function DesignEditor({ slot, category, onSaved, onCancel, flash }) {
         category,
         caption:   caption.trim(),
         imageUrl,
+        publicId: newPublicId || prevPublicId || null,
         updatedAt: new Date().toISOString(),
       };
 
       await saveMeta(designDocId(category, slot.slotNum), data);
       onSaved(category, slot.slotNum, data);
+
+      // Attempt to delete previous asset via backend
+      if (prevPublicId && newPublicId && import.meta.env.VITE_DELETE_API_URL && import.meta.env.VITE_ADMIN_DELETE_TOKEN) {
+        try {
+          await fetch(`${import.meta.env.VITE_DELETE_API_URL}/delete-asset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-token': import.meta.env.VITE_ADMIN_DELETE_TOKEN },
+            body: JSON.stringify({ public_id: prevPublicId }),
+          });
+        } catch (err) {
+          console.warn('Failed to delete previous Cloudinary asset:', err.message || err);
+        }
+      }
     } catch (err) {
       console.error(err);
       flash("❌ Save failed: " + err.message, "err");
@@ -719,6 +807,419 @@ function SlotCard({ label, title, subtitle, imageUrl, badge, onEdit }) {
   );
 }
 
+function SitePanel({ flash }) {
+  const [settings, setSettings] = useState(defaultSiteSettings);
+  const [originalSettings, setOriginalSettings] = useState(defaultSiteSettings);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [file, setFile] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [profileFile, setProfileFile] = useState(null);
+  const [profileFileName, setProfileFileName] = useState("");
+  const profileFileRef = useRef();
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const data = await loadMeta(siteDocId);
+      const merged = { ...defaultSiteSettings, ...(data || {}) };
+      setSettings(merged);
+      setOriginalSettings(merged);
+      setLoading(false);
+    })();
+  }, []);
+
+  const update = (key, value) => setSettings((prev) => ({ ...prev, [key]: value }));
+
+  const updateArray = (key, index, value) => {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: prev[key].map((item, idx) => (idx === index ? value : item)),
+    }));
+  };
+
+  const removeArrayItem = (key, index) => {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: prev[key].filter((_, idx) => idx !== index),
+    }));
+  };
+
+  const addArrayItem = (key, value) => {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: [...prev[key], value],
+    }));
+  };
+
+  const handleFile = (e) => {
+    const picked = e.target.files[0];
+    if (!picked) return;
+    setFile(picked);
+    setFileName(picked.name);
+  };
+
+  const handleProfileFile = (e) => {
+    const picked = e.target.files[0];
+    if (!picked) return;
+    setProfileFile(picked);
+    setProfileFileName(picked.name);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+
+      let cvDownloadUrl = settings.cvDownloadUrl;
+      let profileImageUrl = settings.profileImageUrl;
+      const prevProfilePublicId = settings.profilePublicId || null;
+      let newProfilePublicId = null;
+      let newCvPublicId = null;
+
+      if (file) {
+        const res = await uploadToFixed("portfolio/site/cv", file);
+        cvDownloadUrl = res.secure_url;
+        newCvPublicId = res.public_id;
+      }
+      if (profileFile) {
+        const res = await uploadToFixed("portfolio/site/profile", profileFile);
+        profileImageUrl = res.secure_url;
+        newProfilePublicId = res.public_id;
+      }
+
+      const data = {
+        ...settings,
+        cvDownloadUrl,
+        profileImageUrl,
+        profilePublicId: newProfilePublicId || prevProfilePublicId || null,
+        cvPublicId: newCvPublicId || settings.cvPublicId || null,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await saveMeta(siteDocId, data);
+      const savedSettings = { ...settings, cvDownloadUrl, profileImageUrl, updatedAt: new Date().toISOString() };
+      setSettings(savedSettings);
+      setOriginalSettings(savedSettings);
+      setFile(null);
+      setFileName("");
+      setProfileFile(null);
+      setProfileFileName("");
+      flash("Site settings saved successfully!");
+
+      // Attempt to delete previous profile asset
+      if (prevProfilePublicId && newProfilePublicId && import.meta.env.VITE_DELETE_API_URL && import.meta.env.VITE_ADMIN_DELETE_TOKEN) {
+        try {
+          await fetch(`${import.meta.env.VITE_DELETE_API_URL}/delete-asset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-token': import.meta.env.VITE_ADMIN_DELETE_TOKEN },
+            body: JSON.stringify({ public_id: prevProfilePublicId }),
+          });
+        } catch (err) {
+          console.warn('Failed to delete previous profile asset:', err.message || err);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      flash("❌ Save failed: " + err.message, "err");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={s.editorWrap}>
+        <div style={{ color: "rgba(255,255,255,.55)", fontSize: ".95rem" }}>Loading site settings...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={s.editorWrap}>
+      <h3 style={{ color: "#fff", margin: 0, fontWeight: 800, fontSize: "1.05rem", marginBottom: 18 }}>
+        Site Content Editor
+      </h3>
+
+      <form onSubmit={submit}>
+        <div style={s.twoCol}>
+          <div style={s.col}>
+            <F label="Hero Title">
+              <input
+                style={s.input}
+                value={settings.heroTitle}
+                onChange={(e) => update("heroTitle", e.target.value)}
+                placeholder="Enter hero title"
+              />
+            </F>
+            <F label="Hero Subtitle">
+              <textarea
+                style={{ ...s.input, minHeight: 80, resize: "vertical" }}
+                value={settings.heroSubtitle}
+                onChange={(e) => update("heroSubtitle", e.target.value)}
+                placeholder="Enter hero subtitle"
+              />
+            </F>
+
+            <F label="Profile Picture">
+              <div style={s.uploadBox} onClick={() => profileFileRef.current.click()}>
+                {profileFile ? (
+                  <img src={URL.createObjectURL(profileFile)} alt="Profile preview" style={s.uploadPreview} />
+                ) : settings.profileImageUrl ? (
+                  <img src={settings.profileImageUrl} alt="Current profile" style={s.uploadPreview} />
+                ) : (
+                  <div style={s.uploadPlaceholder}>
+                    <span style={{ fontSize: 32 }}>👤</span>
+                    <span style={{ color: "rgba(255,255,255,.4)", fontSize: ".82rem" }}>Click to choose profile image</span>
+                  </div>
+                )}
+                <div style={s.uploadOverlay}>
+                  📁 {profileFile ? "Replace profile image" : "Choose profile image"}
+                </div>
+              </div>
+              <input
+                ref={profileFileRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={handleProfileFile}
+              />
+              {profileFileName && (
+                <div style={s.fileChosen}>
+                  Selected profile picture: <strong>{profileFileName}</strong>
+                </div>
+              )}
+              {!profileFileName && settings.profileImageUrl && (
+                <div style={s.fileChosen}>
+                  Current profile image loaded from settings.
+                </div>
+              )}
+            </F>
+
+            <F label="About Paragraphs">
+              {settings.aboutParagraphs.map((text, index) => (
+                <div key={index} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+                  <textarea
+                    style={{ ...s.input, flex: 1, minHeight: 70, resize: "vertical" }}
+                    value={text}
+                    onChange={(e) => updateArray("aboutParagraphs", index, e.target.value)}
+                    placeholder={`Paragraph ${index + 1}`}
+                  />
+                  <button
+                    type="button"
+                    style={{ ...s.btnCancel, height: 40, marginTop: 4 }}
+                    onClick={() => removeArrayItem("aboutParagraphs", index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                style={{ ...s.btnPrimary, padding: ".55rem 1rem", marginTop: 4 }}
+                onClick={() => addArrayItem("aboutParagraphs", "")}
+              >
+                + Add paragraph
+              </button>
+            </F>
+
+            <F label="About Badges">
+              {settings.aboutBadges.map((badge, index) => (
+                <div key={index} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                  <input
+                    style={{ ...s.input, flex: 1 }}
+                    value={badge}
+                    onChange={(e) => updateArray("aboutBadges", index, e.target.value)}
+                    placeholder={`Badge ${index + 1}`}
+                  />
+                  <button
+                    type="button"
+                    style={{ ...s.btnCancel, height: 40, marginTop: 0 }}
+                    onClick={() => removeArrayItem("aboutBadges", index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                style={{ ...s.btnPrimary, padding: ".55rem 1rem", marginTop: 4 }}
+                onClick={() => addArrayItem("aboutBadges", "")}
+              >
+                + Add badge
+              </button>
+            </F>
+          </div>
+
+          <div style={s.col}>
+            <F label="Skills & Tools">
+              {settings.skills.map((skill, index) => (
+                <div key={index} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px auto", gap: 8, marginBottom: 8 }}>
+                  <input
+                    style={s.input}
+                    value={skill.name}
+                    onChange={(e) => updateArray("skills", index, { ...skill, name: e.target.value })}
+                    placeholder="Name"
+                  />
+                  <input
+                    style={s.input}
+                    value={skill.icon}
+                    onChange={(e) => updateArray("skills", index, { ...skill, icon: e.target.value })}
+                    placeholder="Icon"
+                  />
+                  <input
+                    style={s.input}
+                    value={skill.color}
+                    onChange={(e) => updateArray("skills", index, { ...skill, color: e.target.value })}
+                    placeholder="Color"
+                  />
+                  <button
+                    type="button"
+                    style={{ ...s.btnCancel, height: 40 }}
+                    onClick={() => removeArrayItem("skills", index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                style={{ ...s.btnPrimary, padding: ".55rem 1rem", marginTop: 4 }}
+                onClick={() => addArrayItem("skills", { name: "", icon: "", color: "#ffffff" })}
+              >
+                + Add skill/tool
+              </button>
+            </F>
+
+            <F label="CV Summary Text">
+              <textarea
+                style={{ ...s.input, minHeight: 110, resize: "vertical" }}
+                value={settings.cvProfile}
+                onChange={(e) => update("cvProfile", e.target.value)}
+                placeholder="Short CV profile text"
+              />
+            </F>
+
+            <F label="CV Download Button Label">
+              <input
+                style={s.input}
+                value={settings.cvDownloadLabel}
+                onChange={(e) => update("cvDownloadLabel", e.target.value)}
+                placeholder="Download Full CV"
+              />
+            </F>
+
+            <F label="CV Download URL">
+              <input
+                style={s.input}
+                value={settings.cvDownloadUrl}
+                onChange={(e) => update("cvDownloadUrl", e.target.value)}
+                placeholder="/CV/Your-CV.pdf or Cloudinary URL"
+              />
+            </F>
+
+            <F label="Upload CV (PDF or image)">
+              <input
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={handleFile}
+                style={s.input}
+              />
+              {fileName && (
+                <div style={s.fileChosen}>
+                  Selected file: <strong>{fileName}</strong>
+                </div>
+              )}
+              {!fileName && settings.cvDownloadUrl && (
+                <div style={s.fileChosen}>
+                  Current download URL: <a href={settings.cvDownloadUrl} target="_blank" rel="noreferrer" style={{ color: "#bfdbfe" }}>{settings.cvDownloadUrl}</a>
+                </div>
+              )}
+            </F>
+          </div>
+        </div>
+
+        <F label="Footer Name">
+          <input
+            style={s.input}
+            value={settings.footerName}
+            onChange={(e) => update("footerName", e.target.value)}
+            placeholder="Your name or brand"
+          />
+        </F>
+
+        <F label="Footer Text">
+          <input
+            style={s.input}
+            value={settings.footerText}
+            onChange={(e) => update("footerText", e.target.value)}
+            placeholder="Small footer message"
+          />
+        </F>
+
+        <F label="Footer Social Links">
+          {settings.footerLinks.map((link, index) => (
+            <div key={index} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 8 }}>
+              <input
+                style={s.input}
+                value={link.name}
+                onChange={(e) => updateArray("footerLinks", index, { ...link, name: e.target.value })}
+                placeholder="Label"
+              />
+              <input
+                style={s.input}
+                value={link.url}
+                onChange={(e) => updateArray("footerLinks", index, { ...link, url: e.target.value })}
+                placeholder="URL"
+              />
+              <button
+                type="button"
+                style={{ ...s.btnCancel, height: 40 }}
+                onClick={() => removeArrayItem("footerLinks", index)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            style={{ ...s.btnPrimary, padding: ".55rem 1rem", marginTop: 4 }}
+            onClick={() => addArrayItem("footerLinks", { name: "", url: "" })}
+          >
+            + Add link
+          </button>
+        </F>
+
+            <div style={s.actions}>
+          <button
+            type="button"
+            style={s.btnCancel}
+            disabled={saving}
+            onClick={() => {
+              setSettings(originalSettings);
+              setFile(null);
+              setFileName("");
+              setProfileFile(null);
+              setProfileFileName("");
+            }}
+          >
+            Cancel
+          </button>
+          <button type="submit" style={{ ...s.btnPrimary, opacity: saving ? .7 : 1 }} disabled={saving}>
+            {saving ? <Spinner /> : "💾 Save site settings"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin .7s linear infinite", verticalAlign: "middle" }} />
+  );
+}
+
 function SkeletonCard() {
   return (
     <div style={{ ...s.slotCard, opacity: .4 }}>
@@ -728,12 +1229,6 @@ function SkeletonCard() {
         <div style={{ height: 10, background: "rgba(255,255,255,.05)", borderRadius: 4, width: "60%" }} />
       </div>
     </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin .7s linear infinite", verticalAlign: "middle" }} />
   );
 }
 

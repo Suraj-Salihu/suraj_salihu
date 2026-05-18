@@ -10,6 +10,7 @@ import Contact from "./components/Contact";
 import Footer from "./components/Footer";
 import MobileNotification from "./components/MobileNotification";
 import AdminPage from "./AdminPage";
+import { SiteSettingsProvider } from "./siteSettingsContext";
 
 // Simple hash-based routing — no react-router needed
 function useRoute() {
@@ -50,18 +51,20 @@ function App() {
 
   // Main portfolio
   return (
-    <div className={darkMode ? "dark" : ""}>
-      <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
-      <Hero />
-      <About />
-      <Skills />
-      <Projects />
-      <DesignWorks />
-      <CV />
-      <Contact />
-      <Footer />
-      <MobileNotification />
-    </div>
+    <SiteSettingsProvider>
+      <div className={darkMode ? "dark" : ""}>
+        <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
+        <Hero />
+        <About />
+        <Skills />
+        <Projects />
+        <DesignWorks />
+        <CV />
+        <Contact />
+        <Footer />
+        <MobileNotification />
+      </div>
+    </SiteSettingsProvider>
   );
 }
 

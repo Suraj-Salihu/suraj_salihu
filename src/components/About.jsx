@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
+import { useSiteSettings } from "../siteSettingsContext";
 
 export default function About() {
+  const { settings } = useSiteSettings();
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -22,24 +24,18 @@ export default function About() {
       <div className="container">
         <h2 className="section-title">About Me</h2>
         <div className="about-content">
-          <div className="profile-img" />
+          <div
+            className="profile-img"
+            style={{ backgroundImage: `url(${settings.profileImageUrl || '/images/Sooraj.jpg'})` }}
+          />
           <div className="about-text">
-            <p>
-              Hello! I'm Suraj Salihu, a full-stack developer with expertise in both frontend and
-              backend technologies. I specialize in building scalable web applications with robust
-              APIs and efficient databases. With 5 years of experience across the stack, I bridge
-              the gap between beautiful interfaces and powerful server-side functionality.
-            </p>
-            <p>
-              My backend expertise includes designing RESTful APIs, optimizing database queries,
-              implementing authentication systems, and deploying cloud infrastructure. I'm proficient
-              in Node.js, Python, and Java backends, with experience in both SQL and NoSQL databases.
-            </p>
+            {settings.aboutParagraphs.map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
             <div className="badges">
-              <span className="badge">Full-Stack Development</span>
-              <span className="badge backend-badge">Backend Specialist</span>
-              <span className="badge">Cloud Architecture</span>
-              <span className="badge">API Design</span>
+              {settings.aboutBadges.map((badge) => (
+                <span className="badge" key={badge}>{badge}</span>
+              ))}
             </div>
           </div>
         </div>

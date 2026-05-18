@@ -1,40 +1,31 @@
+import { useSiteSettings } from "../siteSettingsContext";
+
 export default function Footer() {
+  const { settings } = useSiteSettings();
+
   return (
     <footer>
       <div className="footer-content">
         <div className="footer-info">
-          <h3>Suraj Salihu</h3>
-          <p>Creating digital experiences that matter.</p>
+          <h3>{settings.footerName}</h3>
+          <p>{settings.footerText}</p>
         </div>
         <div className="social-links">
-          <a
-            href="https://github.com/Suraj-Salihu"
-            className="social-link"
-            target="_blank"
-            rel="noreferrer"
-          >
-            GitHub
-          </a>
-          <a
-            href="https://www.linkedin.com/in/suraj-salihu-03813b359"
-            className="social-link"
-            target="_blank"
-            rel="noreferrer"
-          >
-            LinkedIn
-          </a>
-          <a
-            href="https://www.instagram.com/suraj_salihu1"
-            className="social-link"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Instagram
-          </a>
+          {settings.footerLinks.map((link) => (
+            <a
+              key={link.name}
+              href={link.url}
+              className="social-link"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {link.name}
+            </a>
+          ))}
         </div>
       </div>
       <div className="footer-bottom">
-        <p>&copy; {new Date().getFullYear()} Suraj Salihu. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} {settings.footerName}. All rights reserved.</p>
       </div>
     </footer>
   );

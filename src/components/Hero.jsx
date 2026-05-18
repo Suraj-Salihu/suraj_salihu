@@ -1,4 +1,7 @@
+import { useSiteSettings } from "../siteSettingsContext";
+
 export default function Hero() {
+  const { settings } = useSiteSettings();
   const scrollTo = (id) => {
     const el = document.getElementById(id);
     if (el) window.scrollTo({ top: el.offsetTop - 60, behavior: "smooth" });
@@ -7,8 +10,8 @@ export default function Hero() {
   return (
     <section id="home" className="hero">
       <div className="hero-content">
-        <h1>Suraj</h1>
-        <h2>Full-Stack Developer | Graphics Designer</h2>
+        <h1>{settings.heroTitle}</h1>
+        <h2>{settings.heroSubtitle}</h2>
         <div className="hero-buttons">
           <button
             className="btn btn-primary"

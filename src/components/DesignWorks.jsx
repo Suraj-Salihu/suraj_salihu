@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import Slideshow from "./Slideshow";
 
 const DESIGN_CATEGORIES = ["birthday", "advert", "song", "invitation", "logo", "other"];
@@ -50,33 +50,35 @@ export default function DesignWorks() {
 
   // Load from Firestore
   useEffect(() => {
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, "portfolio"));
-        const docs  = {};
+    const unsubscribe = onSnapshot(
+      collection(db, "portfolio"),
+      (snap) => {
+        const docs = {};
         snap.forEach((d) => { docs[d.id] = d.data(); });
 
         const loaded = Object.fromEntries(
           DESIGN_CATEGORIES.map((cat) => {
             const slides = Array.from({ length: 6 }, (_, i) => {
-              const id   = `design-${cat}-${i + 1}`;
+              const id = `design-${cat}-${i + 1}`;
               const data = docs[id];
               if (data?.imageUrl) {
                 return { src: data.imageUrl, caption: data.caption || `${CATEGORY_LABELS[cat]} ${i + 1}` };
               }
-              // fallback for this slot
               return FALLBACK_DESIGNS[cat][i];
             });
             return [cat, slides];
           })
         );
         setDesigns(loaded);
-      } catch (err) {
+      },
+      (err) => {
         console.warn("Firestore unavailable, using fallback designs:", err.message);
         setDesigns(FALLBACK_DESIGNS);
         setError(true);
       }
-    })();
+    );
+
+    return unsubscribe;
   }, []);
 
   return (

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import { skillsData } from "../data";
+import { useSiteSettings } from "../siteSettingsContext";
 
 export default function Skills() {
+  const { settings } = useSiteSettings();
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export default function Skills() {
       <div className="container">
         <h2 className="section-title">Skills &amp; Tools</h2>
         <div className="skills-grid">
-          {skillsData.map((skill) => (
+          {settings.skills.map((skill) => (
             <div className="skill-card" key={skill.name}>
               <span className="skill-icon" style={{ color: skill.color }}>
                 {skill.icon}

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
+import { useSiteSettings } from "../siteSettingsContext";
 
 export default function CV() {
+  const { settings } = useSiteSettings();
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -26,14 +28,7 @@ export default function CV() {
           {/* Profile */}
           <div className="cv-section">
             <h3>Profile</h3>
-            <p>
-              A passionate and self-taught Full-Stack Developer with a BSc in Mathematics and a
-              Diploma in Web Design and Development. Experienced in building responsive websites,
-              PWAs, and mobile-first applications using HTML, CSS, JavaScript, PHP, and Python.
-              Also skilled in graphic design with creative experience in CorelDRAW, Photoshop,
-              and AI tools. Currently focused on developing practical tech solutions for
-              real-world problems.
-            </p>
+            <p>{settings.cvProfile}</p>
           </div>
 
           {/* Work Experience */}
@@ -138,11 +133,12 @@ export default function CV() {
           {/* Download */}
           <div className="cv-download">
             <a
-              href="/cv/Suraj-Salihu-CV.pdf"
-              download="Suraj-Salihu-CV.pdf"
+              href={settings.cvDownloadUrl}
+              target="_blank"
+              rel="noreferrer"
               className="btn btn-primary"
             >
-              ⬇ Download Full CV (PDF)
+              {settings.cvDownloadLabel}
             </a>
           </div>
         </div>

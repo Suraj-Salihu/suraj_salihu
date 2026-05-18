@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 
 // Fallback static data (used if Firestore is empty or offline)
 const FALLBACK = [
@@ -100,27 +100,29 @@ export default function Projects() {
 
   // Load from Firestore
   useEffect(() => {
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, "portfolio"));
-        const docs  = {};
+    const unsubscribe = onSnapshot(
+      collection(db, "portfolio"),
+      (snap) => {
+        const docs = {};
         snap.forEach((d) => { docs[d.id] = d.data(); });
 
         const loaded = Array.from({ length: 6 }, (_, i) => {
-          const id   = `project-${i + 1}`;
+          const id = `project-${i + 1}`;
           const data = docs[id];
-          // If Firestore doc exists and has a title, use it; otherwise use fallback
           return data?.title ? { slotNum: i + 1, ...data } : FALLBACK[i];
-        }).filter((p) => p.title); // skip empty slots
+        }).filter((p) => p.title);
 
         setProjects(loaded.length > 0 ? loaded : FALLBACK);
-      } catch (err) {
+        setLoading(false);
+      },
+      (err) => {
         console.warn("Firestore unavailable, using fallback data:", err.message);
         setProjects(FALLBACK);
-      } finally {
         setLoading(false);
       }
-    })();
+    );
+
+    return unsubscribe;
   }, []);
 
   return (
