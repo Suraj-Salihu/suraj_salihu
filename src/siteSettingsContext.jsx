@@ -11,24 +11,40 @@ export function SiteSettingsProvider({ children }) {
 
   useEffect(() => {
     let active = true;
+    let firestoreResponded = false;
+    
+    // Safety timeout: if Firestore doesn't respond within 3 seconds, render with defaults
+    const timeoutId = setTimeout(() => {
+      if (active && !firestoreResponded) {
+        console.warn("Firestore timeout: rendering with default settings");
+        setLoaded(true);
+      }
+    }, 3000);
+
     const unsubscribe = onSnapshot(
       doc(db, "portfolio", "site-settings"),
       (snap) => {
         if (!active) return;
+        firestoreResponded = true;
         if (snap.exists()) {
           setSettings({ ...defaultSiteSettings, ...snap.data() });
         } else {
           setSettings(defaultSiteSettings);
         }
-        if (active) setLoaded(true);
+        setLoaded(true);
+        clearTimeout(timeoutId);
       },
       (err) => {
+        if (!active) return;
+        firestoreResponded = true;
         console.error("Failed to load site settings:", err);
-        if (active) setLoaded(true);
+        setLoaded(true);
+        clearTimeout(timeoutId);
       }
     );
     return () => {
       active = false;
+      clearTimeout(timeoutId);
       unsubscribe();
     };
   }, []);
