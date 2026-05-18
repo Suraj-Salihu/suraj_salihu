@@ -189,7 +189,7 @@ body.dark .mobile-menu-links .nav-link {
   justify-content: center;
   text-align: center;
   padding: 64px 20px 20px;
-  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/cover.jpg');
+  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7));
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -326,7 +326,7 @@ section {
   width: 200px;
   height: 200px;
   border-radius: 50%;
-  background-image: url('/images/Sooraj.jpg');
+  background-image: none;
   background-size: cover;
   background-position: center;
   margin: 0 auto;

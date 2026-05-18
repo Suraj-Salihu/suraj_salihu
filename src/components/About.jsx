@@ -24,10 +24,12 @@ export default function About() {
       <div className="container">
         <h2 className="section-title">About Me</h2>
         <div className="about-content">
-          <div
-            className="profile-img"
-            style={{ backgroundImage: `url(${settings.profileImageUrl || '/images/Sooraj.jpg'})` }}
-          />
+          {settings.profileImageUrl && (
+            <div
+              className="profile-img"
+              style={{ backgroundImage: `url(${settings.profileImageUrl})` }}
+            />
+          )}
           <div className="about-text">
             {settings.aboutParagraphs.map((paragraph, index) => (
               <p key={index}>{paragraph}</p>

@@ -17,16 +17,7 @@ const CATEGORY_PATHS = {
   invitation: "iv", logo: "logos", other: "other",
 };
 
-// Static fallback images if Firestore is empty
-const FALLBACK_DESIGNS = Object.fromEntries(
-  DESIGN_CATEGORIES.map((cat) => [
-    cat,
-    Array.from({ length: 6 }, (_, i) => ({
-      src:     `/images/designs/${CATEGORY_PATHS[cat]}/${cat}${i + 1}.jpg`,
-      caption: `${CATEGORY_LABELS[cat]} ${i + 1}`,
-    })),
-  ])
-);
+
 
 export default function DesignWorks() {
   const sectionRef              = useRef(null);
@@ -64,7 +55,7 @@ export default function DesignWorks() {
               if (data?.imageUrl) {
                 return { src: data.imageUrl, caption: data.caption || `${CATEGORY_LABELS[cat]} ${i + 1}` };
               }
-              return FALLBACK_DESIGNS[cat][i];
+              return null;
             });
             return [cat, slides];
           })
@@ -72,8 +63,8 @@ export default function DesignWorks() {
         setDesigns(loaded);
       },
       (err) => {
-        console.warn("Firestore unavailable, using fallback designs:", err.message);
-        setDesigns(FALLBACK_DESIGNS);
+        console.warn("Firestore unavailable:", err.message);
+        setDesigns(Object.fromEntries(DESIGN_CATEGORIES.map((cat) => [cat, []])));
         setError(true);
       }
     );

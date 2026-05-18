@@ -7,14 +7,14 @@ export default function Hero() {
     if (el) window.scrollTo({ top: el.offsetTop - 60, behavior: "smooth" });
   };
 
-  const heroBackground = settings.coverImageUrl || "/images/cover.jpg";
+  const heroBackground = settings.coverImageUrl || "";
 
   return (
     <section
       id="home"
       className="hero"
       style={{
-        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('${heroBackground}')`,
+        backgroundImage: heroBackground ? `linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('${heroBackground}')` : "linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7))",
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundAttachment: "fixed",

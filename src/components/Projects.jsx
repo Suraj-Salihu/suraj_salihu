@@ -2,15 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 
-// Fallback static data (used if Firestore is empty or offline)
-const FALLBACK = [
-  { slotNum: 1, title: "JK Clothing - WhatsApp Commerce", description: "Lightweight e-commerce site for fashion products with 1-click WhatsApp ordering.", tech: "HTML5, CSS3, JavaScript, WhatsApp API", features: ["WhatsApp order automation", "LocalStorage cart persistence", "Mobile-first responsive design"], demoLink: "https://jk-fashion.netlify.app/", codeLink: "https://github.com/Suraj-Salihu/e-commerce-website-jk-closet/tree/main", imageUrl: "/images/jk-fashion.jpg", status: "" },
-  { slotNum: 2, title: "Sovex Task Master", description: "Progressive Web App for task management with offline capabilities.", tech: "HTML5, CSS3, JavaScript, PWA", features: ["Installable PWA", "Priority-based tasks", "Offline support"], demoLink: "https://suraj-salihu.github.io/Task-Manager-PWA/", codeLink: "https://github.com/Suraj-Salihu/Task-Manager-PWA/tree/main", imageUrl: "/images/task-Master.png", status: "" },
-  { slotNum: 3, title: "BL4MELESS Artist Portfolio", description: "Professional music artist website showcasing discography and streaming links.", tech: "HTML5, CSS3, JavaScript", features: ["Music player", "Streaming links", "Responsive gallery"], demoLink: "https://bl4meless.netlify.app", codeLink: "https://github.com/Suraj-Salihu/singer-website/blob/main/index.html", imageUrl: "/images/bl4meless-screenshot.jpg", status: "" },
-  { slotNum: 4, title: "The Movement (Tafiyar Matasa)", description: "Official website for a Nigerian youth empowerment movement.", tech: "HTML5, CSS3, JavaScript, EmailJS", features: [], demoLink: "#", codeLink: "#", imageUrl: "/images/TMLogo.png", status: "" },
-  { slotNum: 5, title: "VTU Website", description: "Mobile-first virtual top-up platform for airtime, data, and bill payments.", tech: "HTML5, CSS3, JavaScript, FontAwesome", features: [], demoLink: "#", codeLink: "#", imageUrl: "/images/vtu-screenshot.jpg", status: "" },
-  { slotNum: 6, title: "API Service", description: "High-performance REST API with caching and rate limiting.", tech: "Node.js, Redis, MongoDB, Docker", features: [], demoLink: "#", codeLink: "#", imageUrl: "/images/carbon.png", status: "in-progress", backend: "JWT auth, Redis caching, API docs" },
-];
+
 
 function ProjectCard({ project }) {
   const handleInProgress = (e) => {
@@ -22,10 +14,10 @@ function ProjectCard({ project }) {
     <div className="project-card">
       <div className="project-image-container">
         <img
-          src={project.imageUrl || project.image || "/images/placeholder.jpg"}
+          src={project.imageUrl || project.image || ""}
           alt={project.title}
           className="project-image"
-          onError={(e) => { e.target.src = "/images/TMLogo.png"; }}
+          onError={(e) => { e.target.style.display = "none"; }}
         />
         {project.status === "in-progress" && (
           <span className="status-badge in-progress">In Progress</span>
@@ -109,15 +101,15 @@ export default function Projects() {
         const loaded = Array.from({ length: 6 }, (_, i) => {
           const id = `project-${i + 1}`;
           const data = docs[id];
-          return data?.title ? { slotNum: i + 1, ...data } : FALLBACK[i];
-        }).filter((p) => p.title);
+          return data?.title ? { slotNum: i + 1, ...data } : null;
+        }).filter((p) => p !== null);
 
-        setProjects(loaded.length > 0 ? loaded : FALLBACK);
+        setProjects(loaded);
         setLoading(false);
       },
       (err) => {
-        console.warn("Firestore unavailable, using fallback data:", err.message);
-        setProjects(FALLBACK);
+        console.warn("Firestore unavailable:", err.message);
+        setProjects([]);
         setLoading(false);
       }
     );
