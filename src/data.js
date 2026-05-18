@@ -15,7 +15,11 @@ export const skillsData = [
 export const defaultSiteSettings = {
   heroTitle: 'Suraj',
   heroSubtitle: 'Full-Stack Developer | Graphics Designer',
+  coverImageUrl: '/images/cover.jpg',
+  coverPublicId: null,
   profileImageUrl: '/images/Sooraj.jpg',
+  profilePublicId: null,
+  cvPublicId: null,
   aboutParagraphs: [
     "Hello! I'm Suraj Salihu, a full-stack developer with expertise in both frontend and backend technologies. I specialize in building scalable web applications with robust APIs and efficient databases.",
     "My backend expertise includes designing RESTful APIs, optimizing database queries, implementing authentication systems, and deploying cloud infrastructure. I'm proficient in Node.js, Python, and Java backends, with experience in both SQL and NoSQL databases.",

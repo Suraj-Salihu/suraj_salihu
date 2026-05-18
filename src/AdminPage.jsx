@@ -215,7 +215,7 @@ function Login({ pw, setPw, err, setErr, shake, onLogin }) {
         style={{ ...s.card, ...(shake ? { animation: "shake .45s" } : {}) }}
         onSubmit={onLogin}
       >
-        <div style={{ fontSize: 46, marginBottom: 4 }}>⚡</div>
+        <div className="admin-login-logo" style={{ fontSize: 46, marginBottom: 4 }}>⚡</div>
         <h1 style={s.loginH1}>Admin Panel</h1>
         <p style={s.loginSub}>Sooraj Portfolio CMS</p>
         <input
@@ -239,6 +239,19 @@ function Login({ pw, setPw, err, setErr, shake, onLogin }) {
 function Dashboard({ onLogout }) {
   const [tab, setTab]     = useState("projects");
   const [toast, setToast] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < 768);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const closeSidebar = () => {
+    if (isMobile) setSidebarOpen(false);
+  };
 
   const flash = (msg, type = "ok") => {
     setToast({ msg, type });
@@ -253,61 +266,67 @@ function Dashboard({ onLogout }) {
 
   return (
     <div style={s.shell}>
+      {isMobile && sidebarOpen && <div style={s.sidebarOverlay} onClick={() => setSidebarOpen(false)} />}
       {/* ── Sidebar ── */}
-      <aside style={s.sidebar}>
+      <aside className="admin-sidebar" style={{ ...s.sidebar, ...(isMobile ? s.sidebarMobile : {}), left: isMobile ? (sidebarOpen ? 0 : "-100%") : 0 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {/* Brand */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 26 }}>⚡</span>
+            <span className="admin-brand-logo" style={{ fontSize: 26 }}>⚡</span>
             <div>
               <div style={{ color: "#fff", fontWeight: 800, fontSize: ".95rem" }}>Sooraj CMS</div>
               <div style={{ color: "rgba(255,255,255,.3)", fontSize: ".7rem" }}>Cloudinary + Firestore Admin</div>
             </div>
           </div>
 
-          {/* Nav */}
-          <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {NAV.map(({ key, icon, label }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                style={{ ...s.navBtn, ...(tab === key ? s.navBtnActive : {}) }}
-              >
-                <span>{icon}</span> {label}
-              </button>
-            ))}
-          </nav>
+          <div style={s.sidebarNavBlock}>
+            {/* Nav */}
+            <nav className="admin-nav" style={{ display: "flex", flexDirection: "column", gap: 4, position: "static", width: "100%", top: "auto", left: "auto" }}>
+              {NAV.map(({ key, icon, label }) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setTab(key);
+                    closeSidebar();
+                  }}
+                  style={{ ...s.navBtn, ...(tab === key ? s.navBtnActive : {}) }}
+                >
+                  <span>{icon}</span> {label}
+                </button>
+              ))}
+            </nav>
+            <div style={s.firebasePill}>🔶 Firestore Live</div>
+            <button style={s.logoutBtn} onClick={() => {
+              onLogout();
+              closeSidebar();
+            }}>🚪 Logout</button>
+          </div>
         </div>
-
-        {/* Logout */}
-        <button style={s.logoutBtn} onClick={onLogout}>🚪 Logout</button>
       </aside>
 
       {/* ── Main ── */}
       <div style={s.mainWrap}>
-        {/* Topbar */}
-        <header style={s.topbar}>
-          <div>
-            <h2 style={{ color: "#fff", margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
-              {NAV.find((n) => n.key === tab)?.icon}{" "}
-              {tab === "projects"
-                ? "Manage Projects"
-                : tab === "designs"
-                ? "Manage Design Works"
-                : "Edit Site Content"}
-            </h2>
-            <p style={{ color: "rgba(255,255,255,.35)", margin: "3px 0 0", fontSize: ".8rem" }}>
-              {tab === "projects"
-                ? "6 fixed slots · uploading a new image overwrites the old one permanently"
-                : tab === "designs"
-                ? "6 slots per category · overwrite anytime, old file is deleted automatically"
-                : "Edit hero, about, skills & tools, CV download, and footer social links."}
-            </p>
+        {isMobile && (
+          <div style={s.mobileHeader}>
+            <button style={s.menuBtn} onClick={() => setSidebarOpen((prev) => !prev)}>
+              ☰
+            </button>
+            <div style={{ color: "#fff", fontWeight: 700, flex: 1, textAlign: "center" }}>
+              {NAV.find((n) => n.key === tab)?.label}
+            </div>
+            <div style={s.firebasePill}>🔶 Live</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={s.firebasePill}>🔶 Firestore Live</div>
-          </div>
-        </header>
+        )}
+        <div style={s.pageHeader}>
+          <h2 style={{ color: "#fff", margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
+            {NAV.find((n) => n.key === tab)?.icon}{" "}
+            {tab === "projects"
+              ? "Manage Projects"
+              : tab === "designs"
+              ? "Manage Design Works"
+              : "Edit Site Content"}
+          </h2>
+        </div>
 
         {/* Content */}
         <div style={s.content}>
@@ -816,7 +835,10 @@ function SitePanel({ flash }) {
   const [fileName, setFileName] = useState("");
   const [profileFile, setProfileFile] = useState(null);
   const [profileFileName, setProfileFileName] = useState("");
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverFileName, setCoverFileName] = useState("");
   const profileFileRef = useRef();
+  const coverFileRef = useRef();
 
   useEffect(() => {
     (async () => {
@@ -866,6 +888,13 @@ function SitePanel({ flash }) {
     setProfileFileName(picked.name);
   };
 
+  const handleCoverFile = (e) => {
+    const picked = e.target.files[0];
+    if (!picked) return;
+    setCoverFile(picked);
+    setCoverFileName(picked.name);
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -873,8 +902,11 @@ function SitePanel({ flash }) {
 
       let cvDownloadUrl = settings.cvDownloadUrl;
       let profileImageUrl = settings.profileImageUrl;
+      let coverImageUrl = settings.coverImageUrl;
       const prevProfilePublicId = settings.profilePublicId || null;
+      const prevCoverPublicId = settings.coverPublicId || null;
       let newProfilePublicId = null;
+      let newCoverPublicId = null;
       let newCvPublicId = null;
 
       if (file) {
@@ -887,24 +919,33 @@ function SitePanel({ flash }) {
         profileImageUrl = res.secure_url;
         newProfilePublicId = res.public_id;
       }
+      if (coverFile) {
+        const res = await uploadToFixed("portfolio/site/cover", coverFile);
+        coverImageUrl = res.secure_url;
+        newCoverPublicId = res.public_id;
+      }
 
       const data = {
         ...settings,
         cvDownloadUrl,
         profileImageUrl,
+        coverImageUrl,
         profilePublicId: newProfilePublicId || prevProfilePublicId || null,
+        coverPublicId: newCoverPublicId || prevCoverPublicId || null,
         cvPublicId: newCvPublicId || settings.cvPublicId || null,
         updatedAt: new Date().toISOString(),
       };
 
       await saveMeta(siteDocId, data);
-      const savedSettings = { ...settings, cvDownloadUrl, profileImageUrl, updatedAt: new Date().toISOString() };
+      const savedSettings = { ...settings, cvDownloadUrl, profileImageUrl, coverImageUrl, updatedAt: new Date().toISOString() };
       setSettings(savedSettings);
       setOriginalSettings(savedSettings);
       setFile(null);
       setFileName("");
       setProfileFile(null);
       setProfileFileName("");
+      setCoverFile(null);
+      setCoverFileName("");
       flash("Site settings saved successfully!");
 
       // Attempt to delete previous profile asset
@@ -917,6 +958,17 @@ function SitePanel({ flash }) {
           });
         } catch (err) {
           console.warn('Failed to delete previous profile asset:', err.message || err);
+        }
+      }
+      if (prevCoverPublicId && newCoverPublicId && import.meta.env.VITE_DELETE_API_URL && import.meta.env.VITE_ADMIN_DELETE_TOKEN) {
+        try {
+          await fetch(`${import.meta.env.VITE_DELETE_API_URL}/delete-asset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-token': import.meta.env.VITE_ADMIN_DELETE_TOKEN },
+            body: JSON.stringify({ public_id: prevCoverPublicId }),
+          });
+        } catch (err) {
+          console.warn('Failed to delete previous cover asset:', err.message || err);
         }
       }
     } catch (err) {
@@ -959,6 +1011,41 @@ function SitePanel({ flash }) {
                 onChange={(e) => update("heroSubtitle", e.target.value)}
                 placeholder="Enter hero subtitle"
               />
+            </F>
+
+            <F label="Hero Cover Image">
+              <div style={s.uploadBox} onClick={() => coverFileRef.current.click()}>
+                {coverFile ? (
+                  <img src={URL.createObjectURL(coverFile)} alt="Cover preview" style={s.uploadPreview} />
+                ) : settings.coverImageUrl ? (
+                  <img src={settings.coverImageUrl} alt="Current cover" style={s.uploadPreview} />
+                ) : (
+                  <div style={s.uploadPlaceholder}>
+                    <span style={{ fontSize: 32 }}>🖼️</span>
+                    <span style={{ color: "rgba(255,255,255,.4)", fontSize: ".82rem" }}>Click to choose cover image</span>
+                  </div>
+                )}
+                <div style={s.uploadOverlay}>
+                  📁 {coverFile ? "Replace cover image" : "Choose cover image"}
+                </div>
+              </div>
+              <input
+                ref={coverFileRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={handleCoverFile}
+              />
+              {coverFileName && (
+                <div style={s.fileChosen}>
+                  Selected cover image: <strong>{coverFileName}</strong>
+                </div>
+              )}
+              {!coverFileName && settings.coverImageUrl && (
+                <div style={s.fileChosen}>
+                  Current cover image loaded from settings.
+                </div>
+              )}
             </F>
 
             <F label="Profile Picture">
@@ -1256,14 +1343,21 @@ const s = {
 
   /* Dashboard */
   shell:    { position: "fixed", inset: 0, zIndex: 9999, display: "flex", background: "#0d0d14", color: "#fff", fontFamily: "'Segoe UI', sans-serif", overflow: "hidden" },
-  sidebar:  { width: 220, flexShrink: 0, height: "100%", overflowY: "auto", background: "rgba(255,255,255,.03)", borderRight: "1px solid rgba(255,255,255,.07)", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "1.4rem 1rem", boxSizing: "border-box" },
+  sidebar:  { width: 220, flexShrink: 0, height: "100%", overflowY: "auto", background: "rgba(255,255,255,.03)", borderRight: "1px solid rgba(255,255,255,.07)", display: "flex", flexDirection: "column", justifyContent: "flex-start", padding: "1.4rem 1rem", boxSizing: "border-box", gap: 20 },
+  sidebarNavBlock: { display: "flex", flexDirection: "column", gap: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.08)" },
   navBtn:   { display: "flex", alignItems: "center", gap: 10, padding: ".6rem .9rem", borderRadius: 10, border: "none", background: "transparent", color: "rgba(255,255,255,.45)", fontSize: ".88rem", cursor: "pointer", textAlign: "left", width: "100%", boxSizing: "border-box" },
+  pageHeader: { flexShrink: 0, padding: "1rem 1.6rem", borderBottom: "1px solid rgba(255,255,255,.07)", background: "#0d0d14" },
+  mobileHeader: { display: "flex", alignItems: "center", gap: 12, padding: "0.95rem 1rem", borderBottom: "1px solid rgba(255,255,255,.08)", background: "#0d0d14" },
+  menuBtn: { padding: ".55rem .75rem", borderRadius: 10, border: "1px solid rgba(255,255,255,.12)", background: "transparent", color: "#fff", fontSize: "1rem", cursor: "pointer" },
+  sidebarMobile: { position: "fixed", top: 0, height: "100%", width: "75%", maxWidth: 320, zIndex: 50, background: "rgba(13,13,20,.98)", boxShadow: "2px 0 18px rgba(0,0,0,.35)", transition: "left .25s ease" },
+  sidebarOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 45 },
   navBtnActive: { background: "rgba(59,130,246,.15)", color: "#60a5fa", fontWeight: 700 },
   logoutBtn: { padding: ".55rem .9rem", borderRadius: 10, border: "1px solid rgba(255,255,255,.1)", background: "transparent", color: "rgba(255,255,255,.35)", cursor: "pointer", fontSize: ".82rem", textAlign: "left", width: "100%", boxSizing: "border-box" },
   firebasePill: { padding: ".35rem .8rem", borderRadius: 20, background: "rgba(255,160,0,.1)", border: "1px solid rgba(255,160,0,.3)", color: "#fbbf24", fontSize: ".75rem", fontWeight: 700 },
 
   mainWrap: { flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" },
   topbar:   { flexShrink: 0, padding: "1rem 1.6rem", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "#0d0d14" },
+  topbarDescription: { flexShrink: 0, padding: "0.65rem 1.6rem 1rem", color: "rgba(255,255,255,.55)", fontSize: ".85rem", lineHeight: 1.5, borderBottom: "1px solid rgba(255,255,255,.06)" },
   content:  { flex: 1, overflowY: "auto", overflowX: "hidden", padding: "1.4rem 1.6rem", boxSizing: "border-box" },
 
   /* Grids */

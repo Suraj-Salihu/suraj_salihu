@@ -38,7 +38,7 @@ body.dark {
 }
 
 /* Navigation */
-nav {
+.nav-container nav {
   position: fixed;
   width: 100%;
   top: 0;
@@ -48,8 +48,38 @@ nav {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-body.dark nav {
+body.dark .nav-container nav {
   background-color: rgba(31, 41, 55, 0.8);
+}
+
+/* Admin page override to prevent global site nav styles from affecting admin sidebar nav */
+.admin-sidebar .admin-nav,
+.admin-nav {
+  position: static !important;
+  width: 100% !important;
+  top: auto !important;
+  left: auto !important;
+}
+
+/* Admin logo animations */
+.admin-login-logo {
+  display: inline-block;
+  animation: admin-pulse 2.4s ease-in-out infinite;
+}
+
+.admin-brand-logo {
+  display: inline-block;
+  animation: admin-float 3s ease-in-out infinite;
+}
+
+@keyframes admin-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes admin-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 .nav-container {
