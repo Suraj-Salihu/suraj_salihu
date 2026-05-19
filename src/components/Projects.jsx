@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { db } from "../firebase";
-import { collection, onSnapshot } from "firebase/firestore";
-
-
+import { supabase } from "../supabaseClient";
+import { projectsData } from "../data";
 
 function ProjectCard({ project }) {
   const handleInProgress = (e) => {
@@ -90,31 +88,32 @@ export default function Projects() {
     return () => observer.disconnect();
   }, []);
 
-  // Load from Firestore
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, "portfolio"),
-      (snap) => {
-        const docs = {};
-        snap.forEach((d) => { docs[d.id] = d.data(); });
+    const loadProjects = async () => {
+      const { data, error } = await supabase
+        .from("portfolio")
+        .select("id, data")
+        .like("id", "project-%")
+        .order("id", { ascending: true });
 
-        const loaded = Array.from({ length: 6 }, (_, i) => {
-          const id = `project-${i + 1}`;
-          const data = docs[id];
-          return data?.title ? { slotNum: i + 1, ...data } : null;
-        }).filter((p) => p !== null);
+      if (error) {
+        console.warn("Supabase projects load failed:", error.message);
+        setProjects(projectsData);
+      } else {
+        const loaded = (data || [])
+          .map((row) => ({
+            slotNum: Number(row.id?.split("-")[1] ?? 0),
+            ...row.data,
+          }))
+          .filter((project) => project?.title);
 
-        setProjects(loaded);
-        setLoading(false);
-      },
-      (err) => {
-        console.warn("Firestore unavailable:", err.message);
-        setProjects([]);
-        setLoading(false);
+        setProjects(loaded.length > 0 ? loaded : projectsData);
       }
-    );
 
-    return unsubscribe;
+      setLoading(false);
+    };
+
+    loadProjects();
   }, []);
 
   return (

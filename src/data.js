@@ -51,13 +51,48 @@ export const defaultSiteSettings = {
   ],
 };
 
-export const projectsData = [];
+export const projectsData = [
+  {
+    slotNum: 1,
+    title: "Portfolio Website",
+    description: "A responsive portfolio website built with React and Vite, featuring smooth scroll, dark mode, and project previews.",
+    tech: "React, Vite, CSS",
+    features: ["Responsive layout", "Dark mode toggle", "Section animations"],
+    demoLink: "#",
+    codeLink: "#",
+    status: "live",
+    imageUrl: "https://via.placeholder.com/640x400?text=Portfolio+Website",
+  },
+  {
+    slotNum: 2,
+    title: "Dashboard Interface",
+    description: "An admin-style dashboard showing metrics, cards, and charts using a clean modern UI.",
+    tech: "React, CSS, Charts",
+    features: ["Clean UX", "Modular components", "Responsive design"],
+    demoLink: "#",
+    codeLink: "#",
+    status: "live",
+    imageUrl: "https://via.placeholder.com/640x400?text=Dashboard+Interface",
+  },
+];
 
 export const designWorks = {
-  birthday: [],
-  advert: [],
-  song: [],
-  invitation: [],
-  logo: [],
-  other: [],
+  birthday: [
+    { src: "https://via.placeholder.com/520x320?text=Birthday+Design+1", caption: "Birthday invitation concept" },
+  ],
+  advert: [
+    { src: "https://via.placeholder.com/520x320?text=Advert+Design+1", caption: "Product promo poster" },
+  ],
+  song: [
+    { src: "https://via.placeholder.com/520x320?text=Song+Cover+1", caption: "Song cover artwork" },
+  ],
+  invitation: [
+    { src: "https://via.placeholder.com/520x320?text=Invitation+Design+1", caption: "Invitation card design" },
+  ],
+  logo: [
+    { src: "https://via.placeholder.com/520x320?text=Logo+Design+1", caption: "Custom logo concept" },
+  ],
+  other: [
+    { src: "https://via.placeholder.com/520x320?text=Other+Design+1", caption: "Miscellaneous artwork" },
+  ],
 };

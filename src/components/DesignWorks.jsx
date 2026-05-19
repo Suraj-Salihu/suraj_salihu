@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { db } from "../firebase";
-import { collection, onSnapshot } from "firebase/firestore";
 import Slideshow from "./Slideshow";
+import { supabase } from "../supabaseClient";
+import { designWorks } from "../data";
 
 const DESIGN_CATEGORIES = ["birthday", "advert", "song", "invitation", "logo", "other"];
 const CATEGORY_LABELS   = {
@@ -39,37 +39,44 @@ export default function DesignWorks() {
     return () => observer.disconnect();
   }, []);
 
-  // Load from Firestore
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, "portfolio"),
-      (snap) => {
-        const docs = {};
-        snap.forEach((d) => { docs[d.id] = d.data(); });
+    const loadDesigns = async () => {
+      const { data, error } = await supabase
+        .from("portfolio")
+        .select("id, data")
+        .like("id", "design-%");
 
-        const loaded = Object.fromEntries(
-          DESIGN_CATEGORIES.map((cat) => {
-            const slides = Array.from({ length: 6 }, (_, i) => {
-              const id = `design-${cat}-${i + 1}`;
-              const data = docs[id];
-              if (data?.imageUrl) {
-                return { src: data.imageUrl, caption: data.caption || `${CATEGORY_LABELS[cat]} ${i + 1}` };
-              }
-              return null;
-            }).filter((s) => s !== null);
-            return [cat, slides];
-          })
-        );
-        setDesigns(loaded);
-      },
-      (err) => {
-        console.warn("Firestore unavailable:", err.message);
-        setDesigns(Object.fromEntries(DESIGN_CATEGORIES.map((cat) => [cat, []])));
+      if (error) {
+        console.warn("Supabase design works load failed:", error.message);
+        setDesigns(designWorks);
         setError(true);
+        return;
       }
-    );
 
-    return unsubscribe;
+      const grouped = DESIGN_CATEGORIES.reduce((acc, cat) => {
+        acc[cat] = [];
+        return acc;
+      }, {});
+
+      (data || []).forEach((row) => {
+        const [, category, slot] = row.id.split("-");
+        if (!grouped[category]) return;
+
+        grouped[category].push({
+          src: row.data?.imageUrl || row.data?.src || "",
+          caption: row.data?.caption || CATEGORY_LABELS[category],
+          slotNum: Number(slot),
+        });
+      });
+
+      Object.values(grouped).forEach((slides) => {
+        slides.sort((a, b) => a.slotNum - b.slotNum);
+      });
+
+      setDesigns(grouped);
+    };
+
+    loadDesigns();
   }, []);
 
   return (

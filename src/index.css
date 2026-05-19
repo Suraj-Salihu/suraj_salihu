@@ -38,18 +38,18 @@ body.dark {
 }
 
 /* Navigation */
-.nav-container nav {
+nav {
   position: fixed;
   width: 100%;
   top: 0;
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   z-index: 100;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-body.dark .nav-container nav {
-  background-color: rgba(31, 41, 55, 0.8);
+body.dark nav {
+  background-color: rgba(31, 41, 55, 0.9);
 }
 
 /* Admin page override to prevent global site nav styles from affecting admin sidebar nav */
@@ -59,6 +59,47 @@ body.dark .nav-container nav {
   width: 100% !important;
   top: auto !important;
   left: auto !important;
+}
+
+/* Admin page override to prevent global site nav styles from affecting admin sidebar nav */
+.admin-sidebar .admin-nav,
+.admin-nav {
+  position: static !important;
+  width: 100% !important;
+  top: auto !important;
+  left: auto !important;
+}
+
+.admin-app {
+  background: #0d0d14;
+  color: #fff;
+}
+
+.admin-app .admin-sidebar {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-app .admin-nav button {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.admin-app .admin-nav button:hover {
+  color: #60a5fa;
+}
+
+.admin-app input,
+.admin-app textarea,
+.admin-app select {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.admin-app button,
+.admin-app input,
+.admin-app textarea,
+.admin-app select {
+  font-family: inherit;
 }
 
 /* Admin logo animations */

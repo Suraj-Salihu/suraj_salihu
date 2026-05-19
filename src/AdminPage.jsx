@@ -1,40 +1,10 @@
-/**
- * AdminPage.jsx — Cloudinary + Firestore Portfolio CMS
- *
- * HOW IT WORKS:
- * ─────────────────────────────────────────────────────────────────────────────
- * IMAGES  → Cloudinary at a FIXED PATH per slot (unsigned uploads).
- *           Uploading a new image performs an unsigned Cloudinary upload to the same public_id,
- *           which overwrites the previous file at that path (Cloudinary keeps a single visible
- *           asset per public_id). The admin UI appends a cache-busting query string so the
- *           browser fetches the latest file immediately after an overwrite.
- *
- *           Project image paths:  portfolio/projects/slot-1.jpg  … slot-6.jpg
- *           Design image paths:   portfolio/designs/birthday/slot-1.jpg … etc.
- *
- * METADATA → Firestore documents (title, description, links, caption, etc.)
- *            Doc IDs are fixed: "project-1" … "project-6"
- *                               "design-birthday-1" … "design-other-6"
- *
- * READING  → Your portfolio (Projects.jsx, DesignWorks.jsx) reads from
- *            Firestore + uses Cloudinary URLs stored there.
- * ─────────────────────────────────────────────────────────────────────────────
- */
-
 import { useState, useRef, useEffect } from "react";
-import { db } from "./firebase";
+import { supabase } from "./supabaseClient";
 import { defaultSiteSettings } from "./data";
-import {
-  doc, getDoc, setDoc, collection, getDocs,
-} from "firebase/firestore";
 
 /* ════════════════════════════════════════════════════════════════════════════
    CONSTANTS
 ════════════════════════════════════════════════════════════════════════════ */
-const ADMIN_PASSWORD_HASH = "87a8a4a26d5bfaa9739c5b83014987a3457aab58ab70132440a41378b0049b00"; // SHA-256 of your chosen password
-const AUTH_TOKEN          = "admin_auth";
-const AUTH_TOKEN_EXPIRY   = "admin_auth_expiry";
-const AUTH_EXPIRY_MS      = 30 * 60 * 1000; // 30 minutes
 const DESIGN_CATEGORIES   = ["birthday", "advert", "song", "invitation", "logo", "other"];
 const CATEGORY_LABELS     = {
   birthday:   "Birthday Designs",
@@ -52,13 +22,12 @@ const projectStoragePath = (slotNum) =>
 const designStoragePath = (category, slotNum) =>
   `portfolio/designs/${category}/slot-${slotNum}.jpg`;
 
-// Fixed Firestore doc IDs
 const projectDocId = (slotNum)           => `project-${slotNum}`;
 const designDocId  = (category, slotNum) => `design-${category}-${slotNum}`;
 const siteDocId    = "site-settings";
 
 /* ════════════════════════════════════════════════════════════════════════════
-   FIREBASE HELPERS
+   SUPABASE HELPERS
 ════════════════════════════════════════════════════════════════════════════ */
 
 /** Upload file to Cloudinary (unsigned preset) using the fixed path as public_id.
@@ -74,7 +43,6 @@ async function uploadToFixed(storagePath, file) {
   const isRaw = !file.type.startsWith("image/");
   const url = `https://api.cloudinary.com/v1_1/${cloudName}/${isRaw ? "auto" : "image"}/upload`;
 
-  // We upload using a unique public_id so we can delete the previous asset server-side.
   const storagePathBase = storagePath.replace(/\.[^/.]+$/, "");
   const publicId = `${storagePathBase}-${Date.now()}`;
 
@@ -105,22 +73,13 @@ async function uploadToFixed(storagePath, file) {
   return { secure_url: cacheBusted, public_id: publicId };
 }
 
-/** Save metadata to Firestore (merge keeps existing fields if partial update) */
-async function hashString(value) {
-  const buffer = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function authIsValid() {
-  const token = sessionStorage.getItem(AUTH_TOKEN);
-  const expiry = Number(sessionStorage.getItem(AUTH_TOKEN_EXPIRY));
-  return token === "yes" && expiry > Date.now();
-}
-
 async function saveMeta(docId, data, retries = 2) {
   try {
-    await setDoc(doc(db, "portfolio", docId), data, { merge: true });
+    const { error } = await supabase
+      .from("portfolio")
+      .upsert({ id: docId, data }, { onConflict: "id" });
+
+    if (error) throw error;
   } catch (err) {
     if (retries > 0) {
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -130,17 +89,31 @@ async function saveMeta(docId, data, retries = 2) {
   }
 }
 
-/** Load one Firestore doc → returns data or null */
 async function loadMeta(docId) {
-  const snap = await getDoc(doc(db, "portfolio", docId));
-  return snap.exists() ? snap.data() : null;
+  const { data, error } = await supabase
+    .from("portfolio")
+    .select("data")
+    .eq("id", docId)
+    .single();
+
+  if (error && !error.details?.includes("Results contain 0 rows")) {
+    throw error;
+  }
+
+  return data?.data || null;
 }
 
-/** Load all portfolio docs into a map { docId: data } */
 async function loadAllMeta() {
-  const snap = await getDocs(collection(db, "portfolio"));
-  const out  = {};
-  snap.forEach((d) => { out[d.id] = d.data(); });
+  const { data, error } = await supabase.from("portfolio").select("id, data");
+
+  if (error) {
+    throw error;
+  }
+
+  const out = {};
+  (data || []).forEach((row) => {
+    out[row.id] = row.data;
+  });
   return out;
 }
 
@@ -148,37 +121,70 @@ async function loadAllMeta() {
    ROOT
 ════════════════════════════════════════════════════════════════════════════ */
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(authIsValid);
+  const [authed, setAuthed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pwErr, setPwErr] = useState(false);
   const [shake, setShake] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!authIsValid()) {
-        setAuthed(false);
-      }
-    }, 10000);
-    return () => clearInterval(interval);
+    let active = true;
+
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!active) return;
+      setAuthed(!!data.session);
+      setAuthChecked(true);
+    };
+
+    checkSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setAuthed(!!session);
+    });
+
+    return () => {
+      active = false;
+      listener?.subscription?.unsubscribe();
+    };
   }, []);
 
   const login = async (e) => {
     e.preventDefault();
-    const hash = await hashString(pw);
-    if (hash === ADMIN_PASSWORD_HASH) {
-      sessionStorage.setItem(AUTH_TOKEN, "yes");
-      sessionStorage.setItem(AUTH_TOKEN_EXPIRY, String(Date.now() + AUTH_EXPIRY_MS));
-      setAuthed(true);
-    } else {
+    setPwErr(false);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: pw,
+    });
+
+    if (error) {
       setPwErr(true);
       setShake(true);
       setTimeout(() => setShake(false), 500);
+      return;
     }
+
+    setAuthed(true);
   };
+
+  if (!authChecked) {
+    return (
+      <div style={s.loginPage}>
+        <div style={s.loginGlow} />
+        <div style={{ ...s.card, padding: 32, textAlign: "center" }}>
+          <div style={{ fontSize: 24, marginBottom: 12 }}>Checking admin session…</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!authed)
     return (
       <Login
+        email={email} setEmail={setEmail}
         pw={pw} setPw={setPw}
         err={pwErr} setErr={setPwErr}
         shake={shake} onLogin={login}
@@ -187,9 +193,8 @@ export default function AdminPage() {
 
   return (
     <Dashboard
-      onLogout={() => {
-        sessionStorage.removeItem(AUTH_TOKEN);
-        sessionStorage.removeItem(AUTH_TOKEN_EXPIRY);
+      onLogout={async () => {
+        await supabase.auth.signOut();
         setAuthed(false);
       }}
     />
@@ -199,7 +204,7 @@ export default function AdminPage() {
 /* ════════════════════════════════════════════════════════════════════════════
    LOGIN
 ════════════════════════════════════════════════════════════════════════════ */
-function Login({ pw, setPw, err, setErr, shake, onLogin }) {
+function Login({ email, setEmail, pw, setPw, err, setErr, shake, onLogin }) {
   return (
     <div style={s.loginPage}>
       <div style={s.loginGlow} />
@@ -219,12 +224,20 @@ function Login({ pw, setPw, err, setErr, shake, onLogin }) {
         <h1 style={s.loginH1}>Admin Panel</h1>
         <p style={s.loginSub}>Sooraj Portfolio CMS</p>
         <input
-          type="password" placeholder="Enter password" autoFocus
+          type="email"
+          placeholder="Admin email"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setErr(false); }}
+          style={{ ...s.input, marginTop: 20, width: "100%" }}
+        />
+        <input
+          type="password"
+          placeholder="Enter password"
           value={pw}
           onChange={(e) => { setPw(e.target.value); setErr(false); }}
-          style={{ ...s.input, ...(err ? { borderColor: "#ef4444" } : {}), marginTop: 20, width: "100%" }}
+          style={{ ...s.input, ...(err ? { borderColor: "#ef4444" } : {}), marginTop: 14, width: "100%" }}
         />
-        {err && <p style={{ color: "#ef4444", fontSize: ".8rem", margin: "6px 0 0", alignSelf: "flex-start" }}>❌ Wrong password</p>}
+        {err && <p style={{ color: "#ef4444", fontSize: ".8rem", margin: "6px 0 0", alignSelf: "flex-start" }}>❌ Invalid email or password</p>}
         <button type="submit" style={{ ...s.btnPrimary, width: "100%", marginTop: 14 }}>
           Unlock Dashboard →
         </button>
@@ -265,7 +278,7 @@ function Dashboard({ onLogout }) {
   ];
 
   return (
-    <div style={s.shell}>
+    <div className="admin-app" style={s.shell}>
       {isMobile && sidebarOpen && <div style={s.sidebarOverlay} onClick={() => setSidebarOpen(false)} />}
       {/* ── Sidebar ── */}
       <aside className="admin-sidebar" style={{ ...s.sidebar, ...(isMobile ? s.sidebarMobile : {}), left: isMobile ? (sidebarOpen ? 0 : "-100%") : 0 }}>
@@ -275,7 +288,7 @@ function Dashboard({ onLogout }) {
             <span className="admin-brand-logo" style={{ fontSize: 26 }}>⚡</span>
             <div>
               <div style={{ color: "#fff", fontWeight: 800, fontSize: ".95rem" }}>Sooraj CMS</div>
-              <div style={{ color: "rgba(255,255,255,.3)", fontSize: ".7rem" }}>Cloudinary + Firestore Admin</div>
+              <div style={{ color: "rgba(255,255,255,.3)", fontSize: ".7rem" }}>Cloudinary + Supabase Admin</div>
             </div>
           </div>
 
@@ -295,7 +308,7 @@ function Dashboard({ onLogout }) {
                 </button>
               ))}
             </nav>
-            <div style={s.firebasePill}>🔶 Firestore Live</div>
+            <div style={s.supabasePill}>🔷 Supabase Live</div>
             <button style={s.logoutBtn} onClick={() => {
               onLogout();
               closeSidebar();
@@ -314,7 +327,7 @@ function Dashboard({ onLogout }) {
             <div style={{ color: "#fff", fontWeight: 700, flex: 1, textAlign: "center" }}>
               {NAV.find((n) => n.key === tab)?.label}
             </div>
-            <div style={s.firebasePill}>🔶 Live</div>
+            <div style={s.supabasePill}>🔷 Live</div>
           </div>
         )}
         <div style={s.pageHeader}>
@@ -358,7 +371,7 @@ function ProjectsPanel({ flash }) {
   const [slots, setSlots]     = useState(Array(6).fill(null)); // null = loading
   const [editing, setEditing] = useState(null); // 0-based index or null
 
-  // Load all 6 project slots from Firestore on mount
+  // Load all 6 project slots from Supabase on mount
   useEffect(() => {
     (async () => {
       const all = await loadAllMeta();
@@ -377,7 +390,7 @@ function ProjectsPanel({ flash }) {
       prev.map((s) => (s?.slotNum === slotNum ? { ...s, ...updated } : s))
     );
     setEditing(null);
-    flash(`Slot ${slotNum} saved to Firestore!`);
+    flash(`Slot ${slotNum} saved to Supabase!`);
   };
 
   if (editing !== null)
@@ -573,7 +586,7 @@ function ProjectEditor({ slot, onSaved, onCancel, flash }) {
         <div style={s.actions}>
           <button type="button" style={s.btnCancel} onClick={onCancel} disabled={saving}>Cancel</button>
           <button type="submit" style={{ ...s.btnPrimary, opacity: saving ? .7 : 1 }} disabled={saving}>
-            {saving ? <Spinner /> : "💾 Save to Firestore"}
+            {saving ? <Spinner /> : "💾 Save to Supabase"}
           </button>
         </div>
       </form>
@@ -787,7 +800,7 @@ function DesignEditor({ slot, category, onSaved, onCancel, flash }) {
         <div style={s.actions}>
           <button type="button" style={s.btnCancel} onClick={onCancel} disabled={saving}>Cancel</button>
           <button type="submit" style={{ ...s.btnPrimary, opacity: saving ? .7 : 1 }} disabled={saving}>
-            {saving ? <Spinner /> : "💾 Save to Firestore"}
+            {saving ? <Spinner /> : "💾 Save to Supabase"}
           </button>
         </div>
       </form>
@@ -843,11 +856,19 @@ function SitePanel({ flash }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const data = await loadMeta(siteDocId);
-      const merged = { ...defaultSiteSettings, ...(data || {}) };
-      setSettings(merged);
-      setOriginalSettings(merged);
-      setLoading(false);
+      try {
+        const data = await loadMeta(siteDocId);
+        const merged = { ...defaultSiteSettings, ...(data || {}) };
+        setSettings(merged);
+        setOriginalSettings(merged);
+      } catch (err) {
+        console.error("Failed loading site settings:", err);
+        const merged = { ...defaultSiteSettings };
+        setSettings(merged);
+        setOriginalSettings(merged);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -1372,7 +1393,7 @@ const s = {
   sidebarOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 45 },
   navBtnActive: { background: "rgba(59,130,246,.15)", color: "#60a5fa", fontWeight: 700 },
   logoutBtn: { padding: ".55rem .9rem", borderRadius: 10, border: "1px solid rgba(255,255,255,.1)", background: "transparent", color: "rgba(255,255,255,.35)", cursor: "pointer", fontSize: ".82rem", textAlign: "left", width: "100%", boxSizing: "border-box" },
-  firebasePill: { padding: ".35rem .8rem", borderRadius: 20, background: "rgba(255,160,0,.1)", border: "1px solid rgba(255,160,0,.3)", color: "#fbbf24", fontSize: ".75rem", fontWeight: 700 },
+  supabasePill: { padding: ".35rem .8rem", borderRadius: 20, background: "rgba(59,130,246,.12)", border: "1px solid rgba(59,130,246,.3)", color: "#60a5fa", fontSize: ".75rem", fontWeight: 700 },
 
   mainWrap: { flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" },
   topbar:   { flexShrink: 0, padding: "1rem 1.6rem", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "#0d0d14" },

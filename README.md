@@ -55,6 +55,17 @@ Open `index.html` and change the `<title>` tag:
 npm run dev
 ```
 
+## Supabase Setup
+Create a `.env` file with your Supabase credentials and Cloudinary upload values. You can copy `.env.example` and fill in the values.
+
+Required variables:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_CLOUDINARY_CLOUD_NAME`
+- `VITE_CLOUDINARY_UPLOAD_PRESET`
+
+The admin panel uses a Supabase table named `portfolio`, with a primary key column `id` and a JSON `data` column.
+
 ## Notes on the Contact Form
 The form still targets `send.php`. Since React (Vite) is a static frontend,
 you'll need to either:

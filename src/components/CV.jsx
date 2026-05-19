@@ -133,19 +133,76 @@ export default function CV() {
           {/* Download */}
           <div className="cv-download">
             {settings.cvDownloadUrl?.trim() ? (
-              <a
-                href={settings.cvDownloadUrl}
-                target="_blank"
-                rel="noreferrer noopener"
+              <button
+                type="button"
                 className="btn btn-primary"
-                onClick={(e) => {
-                  if (!settings.cvDownloadUrl?.trim()) {
-                    e.preventDefault();
+                onClick={async (e) => {
+                  e.preventDefault();
+                  const url = settings.cvDownloadUrl;
+                  if (!url) return;
+
+                  const guessName = (u) => {
+                    try {
+                      const p = u.split("/").pop().split("?")[0];
+                      return p || (settings.cvDownloadLabel || "cv.pdf");
+                    } catch (err) {
+                      return settings.cvDownloadLabel || "cv.pdf";
+                    }
+                  };
+
+                  const filename = guessName(url);
+
+                  const downloadViaAnchor = (href) => {
+                    const a = document.createElement("a");
+                    a.href = href;
+                    a.download = filename;
+                    a.style.display = "none";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                  };
+
+                  const makeCloudinaryAttachmentUrl = (href) => {
+                    if (!href.includes("/upload/")) return href;
+                    return href.replace("/upload/", "/upload/fl_attachment/");
+                  };
+
+                  const isPdf = url.split("?")[0].toLowerCase().endsWith(".pdf");
+                  const isCloudinary = url.includes("res.cloudinary.com") && url.includes("/upload/");
+
+                  if (isPdf || isCloudinary) {
+                    try {
+                      const forcedUrl = isCloudinary ? makeCloudinaryAttachmentUrl(url) : url;
+                      downloadViaAnchor(forcedUrl);
+                      return;
+                    } catch (err) {
+                      console.warn("Direct anchor download failed, falling back to blob fetch:", err);
+                    }
+                  }
+
+                  // Try fetch + blob download (prevents redirect to Cloudinary UI)
+                  try {
+                    const res = await fetch(url, { method: "GET", mode: "cors" });
+                    if (!res.ok) throw new Error("Network response was not ok");
+                    const blob = await res.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    downloadViaAnchor(blobUrl);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                  } catch (err) {
+                    // Fallback: force Cloudinary download or open the original URL
+                    console.warn("Direct download failed, attempting Cloudinary attachment fallback:", err);
+                    try {
+                      const forced = makeCloudinaryAttachmentUrl(url);
+                      downloadViaAnchor(forced);
+                    } catch (err2) {
+                      console.warn('Fallback anchor download failed, opening original URL:', err2);
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    }
                   }
                 }}
               >
                 {settings.cvDownloadLabel || "Download CV"}
-              </a>
+              </button>
             ) : (
               <div
                 style={{
