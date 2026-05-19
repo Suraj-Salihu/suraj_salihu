@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from "react";
 import { defaultSiteSettings } from "./data";
 import { supabase } from "./supabaseClient";

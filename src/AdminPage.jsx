@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { defaultSiteSettings } from "./data";
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═════════════════════════════════════════════════════════════════════════
    CONSTANTS
 ════════════════════════════════════════════════════════════════════════════ */
 const DESIGN_CATEGORIES   = ["birthday", "advert", "song", "invitation", "logo", "other"];
