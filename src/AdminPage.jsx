@@ -26,7 +26,7 @@ const projectDocId = (slotNum)           => `project-${slotNum}`;
 const designDocId  = (category, slotNum) => `design-${category}-${slotNum}`;
 const siteDocId    = "site-settings";
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═════════════════════════════════════════════════════════════════════════
    SUPABASE HELPERS
 ════════════════════════════════════════════════════════════════════════════ */
 
