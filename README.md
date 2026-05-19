@@ -1,80 +1,145 @@
-# Sooraj Portfolio – React (Vite) Conversion
+# Suraj Salihu Portfolio
 
-## File Structure to Copy Into Your Project
+## First Release
 
-```
-suraj-salihu/
-├── public/
-│   └── images/         ← copy your original images/ folder here
-│   └── cv/             ← copy your original cv/ folder here
-├── src/
-│   ├── components/
-│   │   ├── Navbar.jsx
-│   │   ├── Hero.jsx
-│   │   ├── About.jsx
-│   │   ├── Skills.jsx
-│   │   ├── Projects.jsx
-│   │   ├── Slideshow.jsx
-│   │   ├── DesignWorks.jsx
-│   │   ├── CV.jsx
-│   │   ├── Contact.jsx
-│   │   ├── Footer.jsx
-│   │   └── MobileNotification.jsx
-│   ├── data.js
-│   ├── App.jsx
-│   ├── main.jsx
-│   └── index.css
-└── index.html          ← keep the existing Vite one
-```
+This repository contains the first release of Suraj Salihu's personal portfolio website, built with React and Vite.
 
-## Setup Steps
+The app includes:
+- Responsive portfolio sections for hero, about, skills, projects, design works, CV, contact, and footer
+- Dark mode with localStorage persistence
+- Admin CMS at `/admin` for managing portfolio content with Supabase auth
+- Cloudinary image uploads for cover, profile, projects, and designs
+- Email contact form using EmailJS
 
-### 1. Copy the src files
-Replace the entire contents of your `src/` folder with the files provided.
+---
 
-### 2. Move your images & CV to public/
-In the original project, images were relative (e.g. `images/cover01.png`).
-In Vite/React, static assets go in the `public/` folder and are referenced from root:
+## Project Structure
 
-```
-# Copy your images folder:
-cp -r /path/to/original/images  suraj-salihu/public/images
+- `public/` — static assets and fallback `index.html`
+- `src/`
+  - `App.jsx` — app shell with hash-based routing and theme handling
+  - `main.jsx` — React entry point
+  - `index.css` — global styles
+  - `data.js` — default portfolio data and site settings
+  - `supabaseClient.js` — Supabase client initialization
+  - `siteSettingsContext.jsx` — portfolio settings loader
+  - `AdminPage.jsx` — authenticated admin panel
+  - `components/` — portfolio sections and UI components
 
-# Copy your cv folder:
-cp -r /path/to/original/cv  suraj-salihu/public/cv
-```
+---
 
-### 3. Update index.html title (optional)
-Open `index.html` and change the `<title>` tag:
-```html
-<title>Sooraj | Full-Stack Developer | Graphics Designer</title>
+## Features
+
+- Responsive design for desktop and mobile
+- Theme toggle with dark / light mode and localStorage persistence
+- Scroll reveal animations for sections
+- Admin dashboard support via Supabase auth
+- Cloudinary-powered image upload in admin
+- Contact form via EmailJS
+- Single-file content source for default data in `src/data.js`
+
+---
+
+## Getting Started
+
+Install dependencies:
+
+```bash
+npm install
 ```
 
-### 4. Run the dev server
+Start the dev server:
+
 ```bash
 npm run dev
 ```
 
-## Supabase Setup
-Create a `.env` file with your Supabase credentials and Cloudinary upload values. You can copy `.env.example` and fill in the values.
+Build for production:
+
+```bash
+npm run build
+```
+
+Preview the production build locally:
+
+```bash
+npm run preview
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the project root or copy `.env.example`.
 
 Required variables:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `VITE_CLOUDINARY_CLOUD_NAME`
-- `VITE_CLOUDINARY_UPLOAD_PRESET`
 
-The admin panel uses a Supabase table named `portfolio`, with a primary key column `id` and a JSON `data` column.
+- `VITE_SUPABASE_URL` — your Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` — your Supabase anonymous key
+- `VITE_CLOUDINARY_CLOUD_NAME` — Cloudinary cloud name used for uploads
+- `VITE_CLOUDINARY_UPLOAD_PRESET` — unsigned Cloudinary upload preset
+- `VITE_EMAILJS_PUBLIC_KEY` — EmailJS public key for the contact form
 
-## Notes on the Contact Form
-The form still targets `send.php`. Since React (Vite) is a static frontend,
-you'll need to either:
-- Keep a PHP backend server alongside it, OR
-- Replace with EmailJS (free): https://www.emailjs.com/
+Example:
 
-## That's it!
-Your portfolio is now a clean React app with:
-- Dark mode via React state + localStorage
-- Scroll animations via IntersectionObserver
-- Reusable Slideshow component
-- All data (skills, projects, designs) in one `data.js` file for easy editing
+```env
+VITE_SUPABASE_URL=https://example.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_CLOUDINARY_CLOUD_NAME=your-cloud-name
+VITE_CLOUDINARY_UPLOAD_PRESET=your-upload-preset
+VITE_EMAILJS_PUBLIC_KEY=your-emailjs-key
+```
+
+---
+
+## Supabase Setup
+
+This project expects a Supabase table named `portfolio` with:
+- `id` (primary key)
+- `data` (JSON)
+
+The app uses this table for:
+- site settings (`site-settings`)
+- project entries
+- design entries
+
+The admin page uses Supabase auth to sign in with email/password.
+
+### Admin Panel
+
+Open `/admin` in your browser to access the dashboard.
+
+The admin panel provides:
+- secure login
+- upload and update functionality for portfolio assets
+- content editing for projects and design categories
+- sign-out support
+
+---
+
+## Contact Form
+
+The contact section uses EmailJS with the public key configured in `.env`.
+
+If you use your own EmailJS account, update the service and template IDs in `src/components/Contact.jsx`.
+
+---
+
+## Notes
+
+- Default portfolio data is defined in `src/data.js`.
+- The site uses `siteSettingsContext.jsx` to load live settings from Supabase and fall back to defaults.
+- The admin image upload flow saves assets to Cloudinary and stores metadata in Supabase.
+
+---
+
+## Release Notes
+
+- Version: `1.0.0`
+- Release: First public release of the portfolio and admin interface
+
+---
+
+## License
+
+This repository is released under the terms defined by the project owner.
